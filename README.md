@@ -6,7 +6,7 @@
 為練習普通話而做：寫好稿之後，先聽一句、跟讀一次，再逐句練下去。
 
 <!-- 建議放一張截圖：把圖片存成 docs/screenshot.png，再把下面這行取消註解 -->
-<!-- ![介面截圖](docs/screenshot.png) -->
+![介面截圖](docs/screenshot.png)
 
 ---
 
