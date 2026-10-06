@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 測試產物
+.pytest_cache/
+
+# 系統
+.DS_Store
+
+# 編輯器
+.vscode/
+.idea/

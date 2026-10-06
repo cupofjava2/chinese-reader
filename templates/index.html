@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中文文字閱讀器</title>
+<style>
+  :root {
+    --bg: #FAFAF8;
+    --panel: #FFFFFF;
+    --ink: #292524;
+    --ink-dim: #78716C;
+    --ink-faint: #A8A29E;
+    --line: #E7E5E4;
+    --accent: #C2410C;
+    --accent-soft: #FDF1E7;
+    --accent-dim: #D6D3D1;
+    --hover: #F0EFEA;
+    --radius: 8px;
+    --fs: 18px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.6 "PingFang TC", "Noto Sans TC", "Hiragino Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 20px 120px; }
+
+  /* ---------- 頂欄 ---------- */
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+  header .spacer { flex: 1; }
+  label.vsel { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-dim); }
+  select {
+    font: inherit; font-size: 13px; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer;
+  }
+
+  /* ---------- 輸入區 ---------- */
+  textarea {
+    width: 100%; min-height: 130px; resize: vertical;
+    font: inherit; line-height: 1.8; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 12px 14px; outline: none;
+  }
+  textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); }
+  .seg button {
+    font: inherit; font-size: 13px; padding: 5px 11px; border: 0; cursor: pointer;
+    background: transparent; color: var(--ink-dim);
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .spacer { flex: 1; }
+  .fz { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-dim); }
+  .fz button {
+    width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--panel); color: var(--ink); cursor: pointer; font-size: 13px; line-height: 1;
+  }
+  .fz button:disabled { opacity: .35; cursor: default; }
+
+  button.primary {
+    font: inherit; font-size: 14px; font-weight: 600; padding: 8px 22px;
+    border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button.primary:disabled { background: var(--accent-dim); cursor: default; }
+  button.ghost {
+    font: inherit; font-size: 13px; padding: 6px 12px;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--panel);
+    color: var(--ink-dim); cursor: pointer;
+  }
+  button.ghost:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+  button.ghost:disabled { opacity: .35; cursor: default; }
+
+  /* ---------- 狀態列 ---------- */
+  .status {
+    display: flex; align-items: center; gap: 10px;
+    margin: 26px 0 6px; font-size: 13px; color: var(--ink-dim);
+  }
+  .status .count { font-variant-numeric: tabular-nums; }
+  .bar { position: relative; height: 2px; background: var(--line); border-radius: 2px; margin: 0 0 14px; overflow: hidden; }
+  .bar > i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); transition: width .3s ease; }
+
+  /* ---------- 句子列表 ---------- */
+  #list { display: flex; flex-direction: column; gap: 2px; }
+  .row {
+    display: flex; gap: 12px; align-items: baseline;
+    padding: 12px 14px; border-radius: var(--radius);
+    border-left: 3px solid transparent; cursor: pointer;
+    font-size: var(--fs); line-height: 1.9; color: var(--ink);
+  }
+  .row:hover { background: var(--hover); }
+  .row .no {
+    flex: 0 0 2em; text-align: right; font-size: 12px; color: var(--ink-faint);
+    font-variant-numeric: tabular-nums; user-select: none;
+  }
+  .row .tx { flex: 1; }
+  .row .tag { font-size: 11px; color: var(--accent); white-space: nowrap; user-select: none; }
+  .row.read { color: var(--ink-faint); border-left-color: var(--accent-dim); }
+  .row.read .tx::before { content: "✓"; margin-right: 6px; color: var(--accent-dim); }
+  .row.now { background: var(--accent-soft); border-left-color: var(--accent); color: var(--ink); font-weight: 500; }
+
+  .empty { padding: 40px 0; text-align: center; color: var(--ink-faint); font-size: 14px; }
+  .hint { margin: 14px 2px 0; font-size: 12px; color: var(--ink-faint); }
+
+  /* ---------- 底部控制 ---------- */
+  .dock {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    background: rgba(250,250,248,.92); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+  }
+  .dock-in {
+    max-width: 760px; margin: 0 auto; padding: 12px 20px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .dock .sp { color: var(--ink-dim); font-size: 13px; }
+  input[type=range] { width: 190px; accent-color: var(--accent); }
+  .sw { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink-dim); user-select: none; }
+  .sw input[type=checkbox] { accent-color: var(--accent); }
+  .sw input[type=number] {
+    width: 44px; font: inherit; font-size: 13px; text-align: center; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 2px 3px;
+  }
+  .sw.dim { opacity: .45; }
+  .mult { font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 38px; }
+  .play { display: flex; gap: 6px; }
+  button.pp {
+    font: inherit; font-size: 13px; padding: 6px 12px; min-width: 34px;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--panel);
+    color: var(--ink); cursor: pointer;
+  }
+  button.pp:disabled { opacity: .3; cursor: default; }
+  button.pp.stop { color: var(--accent); border-color: var(--accent); }
+
+  /* ---------- 右鍵選單 / toast ---------- */
+  #menu {
+    position: fixed; display: none; z-index: 50; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.1);
+    padding: 4px; font-size: 13px;
+  }
+  #menu button { display: block; width: 100%; text-align: left; font: inherit; font-size: 13px;
+    padding: 6px 14px; border: 0; border-radius: 4px; background: none; color: var(--ink); cursor: pointer; }
+  #menu button:hover { background: var(--hover); }
+  #toast {
+    position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%) translateY(8px);
+    background: var(--ink); color: #fff; font-size: 13px; padding: 7px 16px; border-radius: 20px;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60;
+  }
+  #toast.show { opacity: .95; transform: translateX(-50%) translateY(0); }
+  .warn { color: var(--accent); font-size: 13px; margin-top: 8px; }
+
+  @media (max-width: 640px) {
+    .wrap { padding: 16px 14px 150px; }
+    .row { font-size: calc(var(--fs) * .85); padding: 10px; }
+    input[type=range] { width: 130px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>中文文字閱讀器</h1>
+    <div class="spacer"></div>
+    <label class="vsel" title="macOS 系統語音可離線使用；edge-tts 音色較自然但需要網絡">引擎
+      <select id="engine">
+        {% for e in engine_options %}<option value="{{ e.value }}"{% if e.selected %} selected{% endif %}{% if e.disabled %} disabled{% endif %}>{{ e.label }}{% if e.disabled %}（不可用）{% endif %}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="vsel">語音
+      <select id="voice"><option>載入中…</option></select>
+    </label>
+  </header>
+
+  <textarea id="src" placeholder="在此貼上或輸入中文段落…&#10;支援繁體與簡體，點「開始閱讀」會依中文標點自動分句。"></textarea>
+
+  <div class="toolbar">
+    <div class="seg" id="conv">
+      <button data-v="" aria-pressed="true">原文</button>
+      <button data-v="s2t" aria-pressed="false">繁體</button>
+      <button data-v="t2s" aria-pressed="false">簡體</button>
+    </div>
+    <div class="fz">
+      <button id="fsDown" title="縮小字級">A−</button>
+      <span id="fsVal" style="min-width:34px;text-align:center">18</span>
+      <button id="fsUp" title="放大字級">A+</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="ghost" id="clear">清除</button>
+    <button class="primary" id="start">開始閱讀</button>
+  </div>
+  {% if not opencc_available %}<div class="warn">未安裝 opencc，繁簡轉換暫不可用（文字仍可正常朗讀）。</div>{% endif %}
+
+  <div class="status">
+    <span class="count" id="count">尚未分句</span>
+    <div class="spacer"></div>
+    <button class="ghost" id="copyAll" title="把所有句子複製到剪貼簿，每句一行" disabled>複製全文</button>
+  </div>
+  <div class="bar"><i id="bar"></i></div>
+
+  <div id="list"><div class="empty">貼上中文文字後按「開始閱讀」</div></div>
+  <p class="hint" id="hint" hidden>點句子＝朗讀該句 · 右鍵句子＝複製該句</p>
+</div>
+
+<div class="dock">
+  <div class="dock-in">
+    <span class="sp">速度</span>
+    <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+    <span class="mult" id="rateVal">1.0×</span>
+    <label class="sw" title="每讀完一句停頓指定秒數，讓你跟著朗讀練習">
+      <input type="checkbox" id="shadow"> 跟讀
+      <input type="number" id="shadowSecs" min="1" max="15" value="3" title="跟讀停頓秒數"> 秒
+    </label>
+    <div class="spacer"></div>
+    <div class="play">
+      <button class="pp" id="prev" title="上一句" disabled>⏮</button>
+      <button class="pp" id="next" title="下一句" disabled>⏭</button>
+      <button class="pp" id="playAll" disabled>▶ 連續朗讀</button>
+      <button class="pp stop" id="stop" disabled>■ 停止</button>
+    </div>
+  </div>
+</div>
+
+<div id="menu"><button data-act="copy">複製此句</button><button data-act="speak">朗讀此句</button></div>
+<div id="toast"></div>
+
+<script>
+const VOICES = [];
+const OPENCC = {{ opencc_available | tojson }};
+const DEFAULT_VOICE = "Tingting";
+
+const $ = s => document.querySelector(s);
+const el = {
+  src: $('#src'), start: $('#start'), clear: $('#clear'), voice: $('#voice'),
+  engine: $('#engine'),
+  conv: $('#conv'), fsDown: $('#fsDown'), fsUp: $('#fsUp'), fsVal: $('#fsVal'),
+  count: $('#count'), bar: $('#bar'), list: $('#list'),
+  copyAll: $('#copyAll'), rate: $('#rate'), rateVal: $('#rateVal'),
+  prev: $('#prev'), next: $('#next'), playAll: $('#playAll'), stop: $('#stop'),
+  menu: $('#menu'), toast: $('#toast'), hint: $('#hint'),
+  shadow: $('#shadow'), shadowSecs: $('#shadowSecs'),
+};
+
+let sentences = [];
+const readSet = new Set();
+let current = -1;
+let stopRequested = false;
+let chainId = 0;
+let splitGen = 0;
+let convertMode = '';
+
+/* ---------- 偏好設定（存在瀏覽器，下次開啟自動還原） ----------
+ * 語音必須「按引擎分開記」：Tingting 在 edge 引擎不存在，
+ * zh-CN-XiaoxiaoNeural 在 say 引擎也不存在，共用一個值會記錯。
+ */
+const PREFS_KEY = 'chinese-reader:prefs';
+
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; }
+  catch { return {}; }
+}
+function savePrefs() {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {}
+}
+const prefs = Object.assign(
+  { engine: '', voices: {}, fs: 18, shadow: false, shadowSecs: 3 },
+  loadPrefs()
+);
+let fs = Math.max(14, Math.min(28, Number(prefs.fs) || 18));
+
+/* ---------- helpers ---------- */
+async function api(path, body) {
+  const r = await fetch(path, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return r.json();
+}
+
+/* ---------- 語音清單（跟引擎走，並還原該引擎上次選的語音） ---------- */
+async function loadVoices() {
+  const engineId = el.engine.value;
+  const data = await api(`/api/voices?engine=${encodeURIComponent(engineId)}`);
+  const list = data.voices || [];
+  el.voice.innerHTML = '';
+  if (!list.length) {
+    el.voice.innerHTML = `<option value="">${data.error || '此引擎沒有可用語音'}</option>`;
+    VOICES.length = 0;
+    return;
+  }
+  for (const v of list) {
+    const o = document.createElement('option');
+    o.value = v.value;
+    o.textContent = v.label;
+    el.voice.appendChild(o);
+  }
+  // 還原這個引擎上次用的語音（該語音若已不存在則維持預設）
+  const want = prefs.voices[engineId];
+  if (want && list.some(v => v.value === want)) el.voice.value = want;
+  prefs.voices[engineId] = el.voice.value;
+  savePrefs();
+  VOICES.length = 0; list.forEach(v => VOICES.push(v.value));
+  controls();
+}
+
+let toastTimer;
+function toast(msg) {
+  el.toast.textContent = msg;
+  el.toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.toast.classList.remove('show'), 1600);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch {}
+    ta.remove();
+  }
+  toast('已複製');
+}
+
+/* ---------- 渲染 ---------- */
+function render() {
+  el.list.innerHTML = '';
+  if (!sentences.length) {
+    el.list.innerHTML = '<div class="empty">尚未輸入文字</div>';
+    paint();          // ← 清空時也要 paint，否則「共 x 句」不會變回「尚未分句」
+    return;
+  }
+  sentences.forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.dataset.i = i;
+    row.innerHTML = `<span class="no">${i + 1}</span><span class="tx"></span><span class="tag"></span>`;
+    row.querySelector('.tx').textContent = s;   // textContent：避免 XSS
+    el.list.appendChild(row);
+  });
+  paint();
+}
+
+function paint() {
+  [...el.list.children].forEach((row, i) => {
+    const tag = row.querySelector('.tag');
+    if (!tag) return;   // 非句子列（例如「尚未輸入文字」提示列）
+    row.classList.toggle('now', i === current);
+    row.classList.toggle('read', readSet.has(i) && i !== current);
+    tag.textContent = i === current ? '🔊 朗讀中' : '';
+  });
+  el.bar.style.width = (current >= 0 && sentences.length)
+    ? ((current + 1) / sentences.length * 100) + '%' : '0%';
+  el.count.textContent = sentences.length
+    ? `共 ${sentences.length} 句` + (current >= 0 ? ` · 正在讀第 ${current + 1} 句` : '')
+    : '尚未分句';
+  el.hint.hidden = !sentences.length;
+}
+
+function setCurrent(i) {
+  current = i;
+  paint();
+  const row = el.list.children[i];
+  if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function controls() {
+  const has = sentences.length > 0;
+  const busy = current >= 0;
+  el.start.disabled = !el.src.value.trim();
+  el.copyAll.disabled = !has;
+  el.playAll.disabled = !has;
+  el.stop.disabled = !busy;
+  el.prev.disabled = !has || (current < 1);
+  el.next.disabled = !has || (current >= sentences.length - 1);
+  el.playAll.textContent = busy ? '⏸ 暫停' : '▶ 連續朗讀';
+}
+
+/* ---------- 朗讀 ---------- */
+
+/* 跟讀停頓：期間該句保持高亮並倒數，可隨時被停止打斷 */
+async function pauseFor(seconds, index, aborted) {
+  const until = Date.now() + seconds * 1000;
+  const tag = el.list.children[index] && el.list.children[index].querySelector('.tag');
+  const timer = setInterval(() => {
+    if (tag) tag.textContent = `⏸ ${Math.max(0, Math.ceil((until - Date.now()) / 1000))}`;
+  }, 200);
+  try {
+    while (Date.now() < until && !aborted()) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+  } finally {
+    clearInterval(timer);
+    if (tag) tag.textContent = '';
+  }
+  return !aborted();
+}
+
+async function playFrom(i) {
+  const my = ++chainId;
+  stopRequested = false;
+  const aborted = () => stopRequested || my !== chainId;
+  setCurrent(i);
+  controls();
+  try {
+    for (let k = i; k < sentences.length; k++) {
+      if (aborted()) break;
+      setCurrent(k);
+      const res = await api('/api/speak', {
+        text: sentences[k],
+        multiplier: parseFloat(el.rate.value),
+        voice: el.voice.value || DEFAULT_VOICE,
+        engine: el.engine.value,
+      });
+      if (!res.ok || res.reason === 'stopped' || aborted()) {
+        if (res.reason === 'unavailable' || res.reason === 'error') toast(res.detail || '朗讀失敗');
+        break;
+      }
+      readSet.add(k);
+      paint();
+      // 跟讀：讀完一句停一停，讓用戶跟著朗讀
+      if (el.shadow.checked && k < sentences.length - 1) {
+        if (!await pauseFor(shadowSeconds(), k, aborted)) break;
+      }
+    }
+  } finally {
+    if (my === chainId) {
+      current = -1;
+      paint();
+      controls();
+    }
+  }
+}
+
+function clampShadow(v) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? Math.max(1, Math.min(15, n)) : 3;
+}
+function shadowSeconds() { return clampShadow(el.shadowSecs.value); }
+
+async function stopNow() {
+  stopRequested = true;
+  chainId++;                       // 中止所有進行中的連續朗讀鏈
+  await api('/api/stop', {});
+  current = -1;
+  paint();
+  controls();
+}
+
+async function speakOne(i) {
+  await api('/api/stop', {});      // 先殺掉正在播的，避免疊音
+  stopRequested = true;            // 讓舊的連續鏈退出
+  playFrom(i);
+}
+
+/* ---------- 事件 ---------- */
+el.start.addEventListener('click', async () => {
+  const gen = ++splitGen;
+  const data = await api('/api/split', { text: el.src.value, convert: convertMode || null });
+  if (gen !== splitGen) return;      // 期間已按「清除」→ 丟棄回應，不要覆蓋清空後的狀態
+  sentences = data.sentences;
+  readSet.clear();
+  current = -1;
+  render();
+  controls();
+  if (sentences.length) el.list.children[0].scrollIntoView({ block: 'nearest' });
+});
+
+el.clear.addEventListener('click', () => {
+  splitGen++;                        // 作廢任何在途的 /api/split
+  stopNow();
+  el.src.value = '';
+  sentences = []; readSet.clear(); current = -1;
+  render(); controls();
+});
+
+el.conv.addEventListener('click', async e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  [...el.conv.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  convertMode = b.dataset.v;
+  if (el.src.value.trim()) el.start.click();
+});
+
+el.list.addEventListener('click', e => {
+  const row = e.target.closest('.row');
+  if (row) speakOne(+row.dataset.i);
+});
+
+el.list.addEventListener('contextmenu', e => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  e.preventDefault();
+  el.menu.dataset.i = row.dataset.i;
+  el.menu.style.left = Math.min(e.clientX, innerWidth - 130) + 'px';
+  el.menu.style.top = e.clientY + 'px';
+  el.menu.style.display = 'block';
+});
+
+el.menu.addEventListener('click', async e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const i = +el.menu.dataset.i;
+  el.menu.style.display = 'none';
+  if (b.dataset.act === 'copy') await copyText(sentences[i]);
+  else speakOne(i);
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#menu')) el.menu.style.display = 'none';
+});
+
+el.copyAll.addEventListener('click', () => copyText(sentences.join('\n')));
+el.rate.addEventListener('input', () => {
+  el.rateVal.textContent = parseFloat(el.rate.value).toFixed(1) + '×';
+});
+
+el.playAll.addEventListener('click', () => {
+  if (current >= 0) { stopNow(); return; }
+  // 從第一句未讀的繼續；全部讀完則從頭開始
+  const firstUnread = sentences.findIndex((_, i) => !readSet.has(i));
+  playFrom(firstUnread === -1 ? 0 : firstUnread);
+});
+el.prev.addEventListener('click', () => { if (current > 0) speakOne(current - 1); });
+el.next.addEventListener('click', () => { if (current < sentences.length - 1) speakOne(current + 1); });
+el.stop.addEventListener('click', stopNow);
+
+function setFs(v) {
+  fs = Math.max(14, Math.min(28, v));
+  document.documentElement.style.setProperty('--fs', fs + 'px');
+  el.fsVal.textContent = fs;
+  el.fsDown.disabled = fs <= 14;
+  el.fsUp.disabled = fs >= 28;
+  prefs.fs = fs;
+  savePrefs();
+}
+el.fsDown.addEventListener('click', () => setFs(fs - 1));
+el.fsUp.addEventListener('click', () => setFs(fs + 1));
+
+el.src.addEventListener('input', () => { el.start.disabled = !el.src.value.trim(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') stopNow(); });
+
+el.engine.addEventListener('change', () => {
+  prefs.engine = el.engine.value;
+  savePrefs();
+  stopNow();
+  loadVoices();
+});
+el.voice.addEventListener('change', () => {
+  prefs.voices[el.engine.value] = el.voice.value;
+  savePrefs();
+});
+el.shadow.addEventListener('change', () => {
+  prefs.shadow = el.shadow.checked;
+  savePrefs();
+  syncShadow();
+});
+el.shadowSecs.addEventListener('change', () => {
+  prefs.shadowSecs = shadowSeconds();
+  savePrefs();
+});
+
+function syncShadow() {
+  el.shadowSecs.disabled = !el.shadow.checked;
+  el.shadowSecs.parentElement.classList.toggle('dim', !el.shadow.checked);
+}
+
+if (!OPENCC) [...el.conv.children].forEach(x => { x.disabled = true; x.style.opacity = .4; });
+
+// 還原上次的引擎（若該引擎已不可用則保持預設）
+if (prefs.engine) {
+  const opt = [...el.engine.options].find(o => o.value === prefs.engine && !o.disabled);
+  if (opt) el.engine.value = prefs.engine;
+}
+prefs.engine = el.engine.value;
+el.shadow.checked = !!prefs.shadow;
+el.shadowSecs.value = clampShadow(prefs.shadowSecs);   // 還原存檔值，不是 DOM 預設值
+prefs.shadowSecs = clampShadow(prefs.shadowSecs);
+savePrefs();
+syncShadow();
+
+setFs(fs);
+controls();
+loadVoices();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+[project]
+name = "chinese-reader"
+version = "0.1.0"
+description = "中文文字閱讀器 — 點擊句子用普通話朗讀（macOS say）"
+requires-python = ">=3.9"
+dependencies = [
+    "flask>=3.0",
+    "opencc-python-reimplemented>=0.1.7",
+]
+
+[project.optional-dependencies]
+# edge-tts 引擎：全平台可用、音色較自然，但需要網絡。
+# 安裝：uv sync --extra edge
+edge = ["edge-tts>=7.2"]
+
+[tool.uv]
+package = false
