@@ -14,6 +14,11 @@ import tts
 
 app = Flask(__name__)
 
+# macOS AirPlay Receiver（ControlCenter）長期霸住 5000 / 7000。
+# 用呢啲 port 開 server，瀏覽器有機會收埋 AirTunes 個 403
+# （「Access to 127.0.0.1 was denied」），睇落好似自己個 app 出錯。
+AIRPLAY_PORTS = (5000, 7000)
+
 # ---------- 繁簡轉換（可選依賴，缺了自動降級為不轉換） ----------
 
 try:
@@ -115,8 +120,11 @@ def api_health():
 if __name__ == "__main__":
     import sys
 
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 5050
     print(f"\n  中文文字閱讀器 → http://127.0.0.1:{port}")
+    if port in AIRPLAY_PORTS:
+        print(f"  ⚠️  {port} 係 macOS AirPlay Receiver 常用 port，"
+              "瀏覽器可能會收到「Access to 127.0.0.1 was denied」403，建議改用 5050。")
     for e in tts.engine_list():
         mark = "✓" if e["available"] else "✗"
         extra = "" if e["available"] else f"  ({e.get('reason', '')})"

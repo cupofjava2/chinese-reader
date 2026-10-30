@@ -59,7 +59,7 @@ cd chinese-reader
 ```
 
 `run.sh` 會自動做齊兩件事：`uv sync --extra edge` 建立 `.venv` 裝齊依賴，
-然後啟動 server（預設 port 5000）。開瀏覽器去 <http://127.0.0.1:5000> 就得。
+然後啟動 server（預設 port 5050）。開瀏覽器去 <http://127.0.0.1:5050> 就得。
 
 會裝三個依賴：
 
@@ -74,10 +74,32 @@ cd chinese-reader
 ### 其他用法
 
 ```sh
-./run.sh 5050                          # 換 port（macOS AirPlay 接收器霸咗 5000 時用）
+./run.sh 8080                           # 換 port
 uv sync --extra edge                   # 只裝依賴唔啟動
-uv run python app.py 5000              # 手動啟動
+uv run python app.py 5050              # 手動啟動
 ```
+
+### 關於 port 5050
+
+預設用 **5050**，唔用 5000——因為 macOS 嘅 AirPlay Receiver 長期霸住 `5000` 同 `7000`。
+用 5000 開 server 會有兩種撞鬼情況：
+
+- **app 未起／啱啱重啟緊**，瀏覽器一 refresh → AirTunes 個 server 接手 → 403
+- **網址打 `localhost`**（解析成 `::1`）→ AirTunes 個 IPv6 監聽接手 → 403
+
+兩者都會顯示成 Safari 嘅
+
+```
+Access to 127.0.0.1 was denied
+You don't have authorization to view this page.
+HTTP ERROR 403
+```
+
+睇落好似自己個 app 出咗事，其實係 AirTunes 個 403 頁。5050 就冇呢個問題，
+`127.0.0.1:5050` 同 `localhost:5050` 都得。
+
+萬一要改用 5000，啟動時會有提示；或者直接去
+**系統設定 → 一般 → AirPlay 接收器 → 關閉**。
 
 ### Windows
 
@@ -86,7 +108,7 @@ PowerShell 或 Git Bash 執行同樣的 `./run.sh`；若 shell 唔支援 `./run.
 
 ```sh
 uv sync --extra edge
-uv run python app.py 5000
+uv run python app.py 5050
 ```
 
 ### 更新

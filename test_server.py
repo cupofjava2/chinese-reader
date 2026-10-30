@@ -1,6 +1,6 @@
 """後端整合測試 — 驗證「阻塞至讀完」這個核心同步假設是否真的成立。
 
-前置：先起 server →  uv run python app.py 5000
+前置：先起 server →  uv run python app.py 5050
 跑法：uv run python test_server.py
 """
 
@@ -9,7 +9,7 @@ import threading
 import time
 import urllib.request
 
-BASE = "http://127.0.0.1:5000"
+BASE = "http://127.0.0.1:5050"
 
 results = []
 
