@@ -207,17 +207,39 @@ def edge_installed():
         return False
 
 
+def edge_gec_v2_supported():
+    """edge-tts 是否支援微軟現時強制嘅 Sec-MS-GEC v2 token。
+
+    微軟 2026-10 起改用 v2 驗證，舊版 edge-tts（< 7.3）淨係送 v1，
+    WebSocket 握手會被 403 拒絕。讀 token 格式嘅 major version，
+    將來升 v3 都唔會誤判。
+    """
+    try:
+        import edge_tts
+        ver = str(getattr(edge_tts.constants, "SEC_MS_GEC_VERSION", "2"))
+    except Exception:
+        return True          # 讀唔到就唔阻擋，交由 speak() 實測
+    major = ver.split("-", 1)[0]
+    return major.isdigit() and int(major) >= 2
+
+
+EDGE_UPGRADE_HINT = "uv sync --extra edge --upgrade-package edge-tts"
+
+
 class EdgeEngine(Engine):
     id = "edge"
     label = "edge-tts（音色較自然，需網絡）"
     needs_network = True
 
     def available(self):
-        return edge_installed() and find_player() is not None
+        return (edge_installed() and edge_gec_v2_supported()
+                and find_player() is not None)
 
     def unavailable_reason(self):
         if not edge_installed():
             return "未安裝 edge-tts（pip install edge-tts）"
+        if not edge_gec_v2_supported():
+            return f"edge-tts 版本過舊（需 7.3 以上），請更新：{EDGE_UPGRADE_HINT}"
         return "找不到 mp3 播放器（afplay / ffplay / mpg123）"
 
     def voices(self):
@@ -256,7 +278,16 @@ class EdgeEngine(Engine):
         fd, path = tempfile.mkstemp(suffix=".mp3")
         os.close(fd)
         try:
-            asyncio.run(synth(path))
+            try:
+                asyncio.run(synth(path))
+            except Exception as exc:
+                # 握手被拒 = 微軟唔認這個 token，通常係 edge-tts 版本過舊
+                if getattr(exc, "status", None) == 403:
+                    raise RuntimeError(
+                        "微軟拒絕了 edge-tts 請求（403）——通常係 edge-tts 版本過舊，"
+                        f"請更新：{EDGE_UPGRADE_HINT}"
+                    ) from exc
+                raise
             if os.path.getsize(path) < 512:
                 raise RuntimeError("edge-tts 沒有產生音訊（可能無網絡）")
             player = find_player()

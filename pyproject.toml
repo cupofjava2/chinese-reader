@@ -11,7 +11,7 @@ dependencies = [
 [project.optional-dependencies]
 # edge-tts 引擎：全平台可用、音色較自然，但需要網絡。
 # 安裝：uv sync --extra edge
-edge = ["edge-tts>=7.2"]
+edge = ["edge-tts>=7.3.1"]
 
 [tool.uv]
 package = false

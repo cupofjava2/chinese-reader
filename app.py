@@ -42,7 +42,7 @@ def index():
         "index.html",
         engine_options=[
             {"value": e["id"], "label": e["label"], "selected": e["id"] == default_engine,
-             "disabled": not e["available"]}
+             "disabled": not e["available"], "reason": e.get("reason", "")}
             for e in engines
         ],
         opencc_available=bool(_CC),

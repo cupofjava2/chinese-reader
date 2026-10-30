@@ -168,7 +168,7 @@
     <div class="spacer"></div>
     <label class="vsel" title="macOS 系統語音可離線使用；edge-tts 音色較自然但需要網絡">引擎
       <select id="engine">
-        {% for e in engine_options %}<option value="{{ e.value }}"{% if e.selected %} selected{% endif %}{% if e.disabled %} disabled{% endif %}>{{ e.label }}{% if e.disabled %}（不可用）{% endif %}</option>{% endfor %}
+        {% for e in engine_options %}<option value="{{ e.value }}"{% if e.selected %} selected{% endif %}{% if e.disabled %} disabled{% endif %}>{{ e.label }}{% if e.disabled %}（不可用{% if e.reason %}：{{ e.reason }}{% endif %}）{% endif %}</option>{% endfor %}
       </select>
     </label>
     <label class="vsel">語音
