@@ -189,6 +189,9 @@
       <span id="fsVal" style="min-width:34px;text-align:center">18</span>
       <button id="fsUp" title="放大字級">A+</button>
     </div>
+    <label class="sw" title="貼上文字後立即由第一句開始朗讀">
+      <input type="checkbox" id="autoRead"> 自動閱讀
+    </label>
     <div class="spacer"></div>
     <button class="ghost" id="clear">清除</button>
     <button class="primary" id="start">開始閱讀</button>
@@ -243,6 +246,7 @@ const el = {
   prev: $('#prev'), next: $('#next'), playAll: $('#playAll'), stop: $('#stop'),
   menu: $('#menu'), toast: $('#toast'), hint: $('#hint'),
   shadow: $('#shadow'), shadowSecs: $('#shadowSecs'),
+  autoRead: $('#autoRead'),
 };
 
 let sentences = [];
@@ -267,7 +271,7 @@ function savePrefs() {
   try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {}
 }
 const prefs = Object.assign(
-  { engine: '', voices: {}, fs: 18, shadow: false, shadowSecs: 3 },
+  { engine: '', voices: {}, fs: 18, shadow: false, shadowSecs: 3, autoRead: false },
   loadPrefs()
 );
 let fs = Math.max(14, Math.min(28, Number(prefs.fs) || 18));
@@ -461,7 +465,9 @@ async function speakOne(i) {
 }
 
 /* ---------- 事件 ---------- */
-el.start.addEventListener('click', async () => {
+/* 「開始閱讀」與「自動閱讀」共用同一條分句路徑：
+ * 這樣繁簡轉換、XSS 安全的 textContent 渲染、清除時作廢在途回應都只有一份。 */
+async function startReading({ autoplay = false } = {}) {
   const gen = ++splitGen;
   const data = await api('/api/split', { text: el.src.value, convert: convertMode || null });
   if (gen !== splitGen) return;      // 期間已按「清除」→ 丟棄回應，不要覆蓋清空後的狀態
@@ -470,8 +476,12 @@ el.start.addEventListener('click', async () => {
   current = -1;
   render();
   controls();
-  if (sentences.length) el.list.children[0].scrollIntoView({ block: 'nearest' });
-});
+  if (!sentences.length) return;
+  el.list.children[0].scrollIntoView({ block: 'nearest' });
+  if (autoplay) playFrom(0);
+}
+
+el.start.addEventListener('click', () => startReading());
 
 el.clear.addEventListener('click', () => {
   splitGen++;                        // 作廢任何在途的 /api/split
@@ -486,7 +496,7 @@ el.conv.addEventListener('click', async e => {
   if (!b) return;
   [...el.conv.children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   convertMode = b.dataset.v;
-  if (el.src.value.trim()) el.start.click();
+  if (el.src.value.trim()) startReading();
 });
 
 el.list.addEventListener('click', e => {
@@ -545,6 +555,17 @@ el.fsDown.addEventListener('click', () => setFs(fs - 1));
 el.fsUp.addEventListener('click', () => setFs(fs + 1));
 
 el.src.addEventListener('input', () => { el.start.disabled = !el.src.value.trim(); });
+
+/* 自動閱讀：貼上就讀。用貼上「之後」的 textarea 值，而不是 clipboardData
+ * （Safari 有時 clipboardData 是空的）；不 preventDefault，貼上照常發生。 */
+el.src.addEventListener('paste', () => {
+  if (!el.autoRead.checked) return;
+  setTimeout(async () => {
+    if (!el.src.value.trim()) return;          // 空白貼上：不動，也不打斷正在播的
+    await stopNow();                           // 舊的立即靜音，避免疊音
+    startReading({ autoplay: true });
+  }, 0);
+});
 document.addEventListener('keydown', e => { if (e.key === 'Escape') stopNow(); });
 
 el.engine.addEventListener('change', () => {
@@ -561,6 +582,10 @@ el.shadow.addEventListener('change', () => {
   prefs.shadow = el.shadow.checked;
   savePrefs();
   syncShadow();
+});
+el.autoRead.addEventListener('change', () => {
+  prefs.autoRead = el.autoRead.checked;
+  savePrefs();
 });
 el.shadowSecs.addEventListener('change', () => {
   prefs.shadowSecs = shadowSeconds();
@@ -581,6 +606,7 @@ if (prefs.engine) {
 }
 prefs.engine = el.engine.value;
 el.shadow.checked = !!prefs.shadow;
+el.autoRead.checked = !!prefs.autoRead;
 el.shadowSecs.value = clampShadow(prefs.shadowSecs);   // 還原存檔值，不是 DOM 預設值
 prefs.shadowSecs = clampShadow(prefs.shadowSecs);
 savePrefs();

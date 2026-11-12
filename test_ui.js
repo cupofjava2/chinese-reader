@@ -333,6 +333,62 @@ async function loadScript() {
   check('切回 say 引擎時還原 say 自己的語音', registry['#voice'].value === 'Sinji',
     registry['#voice'].value);
 
+  /* ---------- 自動閱讀：貼上即由第一句開始朗讀 ---------- */
+  const autoSpoke = [];
+  let autoSplits = 0;
+  global.fetch = async (p, opt) => {
+    if (p === '/api/voices') {
+      const e = new URL(p, 'http://x').searchParams.get('engine');
+      return { json: async () => ({ voices: VOICE_LISTS[e] || [] }) };
+    }
+    if (p === '/api/split') {
+      autoSplits++;
+      return { json: async () => ({ sentences: ['甲。', '乙。'] }) };
+    }
+    if (p === '/api/speak') {
+      autoSpoke.push(JSON.parse(opt.body).text);
+      return { json: async () => ({ ok: true }) };
+    }
+    return { json: async () => ({ ok: true }) };
+  };
+  registry['#shadow'].checked = false;              // 避免跟讀停頓拖慢測試
+
+  // 關閉時：貼上不應自動分句或朗讀
+  registry['#autoRead'].checked = false;
+  registry['#src'].value = '甲。乙。';
+  registry['#src']._h.paste({});
+  await new Promise(r => setTimeout(r, 100));
+  check('自動閱讀關閉時，貼上不會朗讀', autoSpoke.length === 0, `讀了 ${autoSpoke.length} 句`);
+  check('自動閱讀關閉時，貼上不會重新分句', autoSplits === 0, `分句 ${autoSplits} 次`);
+
+  // 開啟時：貼上 → 由第一句開始連續朗讀
+  registry['#autoRead'].checked = true;
+  registry['#autoRead']._h.change();
+  registry['#src'].value = '甲。乙。';
+  registry['#src']._h.paste({});
+  await new Promise(r => setTimeout(r, 150));
+  check('開啟自動閱讀後，貼上即由第一句開始讀', autoSpoke[0] === '甲。',
+    JSON.stringify(autoSpoke));
+  check('開啟自動閱讀後，貼上會重新分句並讀完全部', autoSpoke.length === 2
+    && registry['#count'].textContent.includes('共 2 句'), JSON.stringify(autoSpoke));
+
+  // 空白貼上：既不朗讀，也不打斷
+  autoSpoke.length = 0;
+  registry['#src'].value = '   ';
+  registry['#src']._h.paste({});
+  await new Promise(r => setTimeout(r, 100));
+  check('貼上空白不會觸發朗讀', autoSpoke.length === 0, `讀了 ${autoSpoke.length} 句`);
+
+  const savedAuto = JSON.parse(global.localStorage.getItem('chinese-reader:prefs'));
+  check('自動閱讀開關有寫入 localStorage', savedAuto.autoRead === true,
+    JSON.stringify(savedAuto));
+
+  // 重新載入頁面後要還原開關
+  registry['#autoRead'].checked = false;
+  new Function(js)();
+  await new Promise(r => setTimeout(r, 60));
+  check('重新載入後還原自動閱讀開關', registry['#autoRead'].checked === true);
+
   console.log(`\n${pass}/${pass + fail} 通過`);
   process.exit(fail ? 1 : 0);
 })();
