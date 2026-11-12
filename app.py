@@ -6,7 +6,11 @@
 進度與高亮都是本地狀態，不會錯位。
 """
 
+import socket
 import subprocess
+import threading
+import time
+import webbrowser
 
 from flask import Flask, jsonify, render_template, request
 
@@ -117,11 +121,30 @@ def api_health():
     )
 
 
+def open_browser_when_ready(url, port, timeout=10.0):
+    """等 server 真正開始接受連線才開瀏覽器。
+
+    Flask 要到 app.run() 才 bind port。若用固定 sleep，慢機／首次 uv sync 之後
+    可能開出「無法連上」的頁面（同 README 講嘅 AirTunes 403 一樣易誤會）。
+    改用 TCP 探測：連得上就代表 server 已在監聽。
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                webbrowser.open(url)
+                return
+        except OSError:
+            time.sleep(0.1)
+    # 時限內起唔到（例如 port 被佔用）就不開，避免開出錯誤頁
+
+
 if __name__ == "__main__":
     import sys
 
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 5050
-    print(f"\n  中文文字閱讀器 → http://127.0.0.1:{port}")
+    url = f"http://127.0.0.1:{port}"
+    print(f"\n  中文文字閱讀器 → {url}")
     if port in AIRPLAY_PORTS:
         print(f"  ⚠️  {port} 係 macOS AirPlay Receiver 常用 port，"
               "瀏覽器可能會收到「Access to 127.0.0.1 was denied」403，建議改用 5050。")
@@ -130,4 +153,7 @@ if __name__ == "__main__":
         extra = "" if e["available"] else f"  ({e.get('reason', '')})"
         print(f"    {mark} {e['id']:<6} {e['label']}{extra}")
     print()
+    threading.Thread(
+        target=open_browser_when_ready, args=(url, port), daemon=True
+    ).start()
     app.run(host="127.0.0.1", port=port, threaded=True, debug=False)

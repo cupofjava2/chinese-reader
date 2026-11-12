@@ -60,7 +60,8 @@ cd chinese-reader
 ```
 
 `run.sh` 會自動做齊兩件事：`uv sync --extra edge` 建立 `.venv` 裝齊依賴，
-然後啟動 server（預設 port 5050）。開瀏覽器去 <http://127.0.0.1:5050> 就得。
+然後啟動 server（預設 port 5050）**並自動開啟瀏覽器**。
+冇自動彈出（例如喺 SSH／無桌面環境）就手動去 <http://127.0.0.1:5050>。
 
 會裝三個依賴：
 
